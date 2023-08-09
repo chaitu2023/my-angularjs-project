@@ -1,0 +1,62 @@
+trigger:
+- master
+
+pr:
+- '*'
+
+pool:
+  vmImage: 'windows-latest'
+
+variables:
+  buildConfiguration: 'Release'
+  iisWebAppName: 'MyAngularApp'
+  iisSiteName: 'Default Web Site'
+  iisPhysicalPath: '%SystemDrive%\\inetpub\\wwwroot\\$(iisWebAppName)'
+
+steps:
+- task: UseNode@1
+  inputs:
+    versionSpec: '14.x'
+    checkLatest: true
+
+- script: npm install
+  displayName: 'Install npm packages'
+
+- script: npm run test
+  displayName: 'Run tests'
+
+- task: ArchiveFiles@2
+  inputs:
+    rootFolderOrFile: 'app'
+    includeRootFolder: false
+    archiveFile: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip'
+    replaceExistingArchive: true
+
+- task: PublishBuildArtifacts@1
+  inputs:
+    artifactName: 'drop'
+    pathToPublish: '$(Build.ArtifactStagingDirectory)'
+    publishLocation: 'Container'
+
+- task: IISWebAppManagementOnMachineGroup@0
+  inputs:
+    IISDeploymentType: 'IISWebsite'
+    ActionIISWebsite: 'CreateOrUpdateWebsite'
+    WebsiteName: $(iisWebAppName)
+    WebsitePhysicalPath: $(iisPhysicalPath)
+    AddBinding: true
+    Bindings: |
+      [
+        {
+          "protocol": "http",
+          "port": 80,
+          "sslThumb": "",
+          "hostname": ""
+        }
+      ]
+
+- task: IISWebAppDeploymentOnMachineGroup@0
+  inputs:
+    WebSiteName: $(iisWebAppName)
+    VirtualApplication: '/'
+    Package: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip'
